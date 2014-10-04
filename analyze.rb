@@ -7,20 +7,24 @@ require 'json'
 require 'octokit'
 require 'redis'
 require 'jenkins_api_client'
+require 'faraday'
 
 
-github_token = ENV['KWSEEKER_GITHUB_AUTH_TOKEN']
-repo = ENV['KWSEEKER_REPO'] || "joyent/node"
-jenkins_server_ip = ENV['KWSEEKER_JENKINS_SERVER_IP'] || "dh"
-jenkins_server_port = ENV['KWSEEKER_JENKINS_SERVER_PORT'] || 8082
+$github_token = ENV['KWSEEKER_GITHUB_AUTH_TOKEN']
+$repo = ENV['KWSEEKER_REPO'] || "joyent/node"
+$jenkins_server_ip = ENV['KWSEEKER_JENKINS_SERVER_IP'] || "dh"
+$jenkins_server_port = ENV['KWSEEKER_JENKINS_SERVER_PORT'] || 8082
+$kw_project_name = ENV['KWSEEKER_KLOCWORK_PROJECT_NAME'] || "node.js"
+$kw_username = ENV['KWSEEKER_KLOCWORK_USERNAME'] || "ledelstein"
+$kw_api_endpoint = ENV['KWSEEKER_KLOCWORK_API_ENDPOINT'] || 'http://localhost:8080/review/api'
 
 redis = Redis.new
 
-github = Octokit::Client.new(:access_token => github_token)
+github = Octokit::Client.new(:access_token => $github_token)
 user = github.user
 user.login
 
-jenkins = JenkinsApi::Client.new(server_ip: jenkins_server_ip, server_port: jenkins_server_port)
+jenkins = JenkinsApi::Client.new(server_ip: $jenkins_server_ip, server_port: $jenkins_server_port)
 
 #
 # Find the next commit to analyze, or, if there's a command line argument, interpret it as the SHA for that commit.
@@ -35,10 +39,10 @@ end
 #
 # Ask Github for this commit's parents.
 #
-commit = github.commit(repo, sha1)
+commit = github.commit($repo, sha1)
 parents = commit.parents
 if parents.length > 1 
-  puts "SHA1 #{sha1} in repo #{repo} has #{parents.length} parents; more than one parent isn't supported yet."
+  puts "SHA1 #{sha1} in repo #{$repo} has #{parents.length} parents; more than one parent isn't supported yet."
   exit
 end
 
@@ -50,3 +54,16 @@ puts "Its parent is #{parent_sha}"
 #
 jenkins.job.build("analyze", {sha1: parent_sha})
 jenkins.job.build("analyze", {sha1: sha1})
+
+# Wait for these analyses to finish.
+#
+
+#
+# Look for issues that were fixed by the second build.
+#
+name = Klocwork.getLatestBuildName
+query = "state:FIXED build:#{build_name}"
+results = Klocwork.search(name, query)
+if results.length > 0
+  puts "There are #{results.length} fixed issues between builds for #{parent_sha} and #{sha1}."
+end
