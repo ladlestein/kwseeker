@@ -14,14 +14,14 @@ require_relative 'klocwork_api'
 
 $log = Logger.new("/var/log/kwseeker/work.log")
 
-$github_token = ENV['KWSEEKER_GITHUB_AUTH_TOKEN']
+$github_token = ENV['KWSEEKER_GITHUB_AUTH_TOKEN'] || ARGV[0]
 $repo = ENV['KWSEEKER_REPO'] || "ladlestein/seeker-test"
 $jenkins_server_ip = ENV['KWSEEKER_JENKINS_SERVER_IP'] || "localhost"
 $jenkins_server_port = ENV['KWSEEKER_JENKINS_SERVER_PORT'] || 3010
-$kw_project_name = ENV['KWSEEKER_KLOCWORK_PROJECT_NAME'] || "seeker-test"
+$jenkins_job_name = ENV['KWSEEKER_JENKINS_JOB_NAME'] || "analyze"
 $kw_username = ENV['KWSEEKER_KLOCWORK_USERNAME'] || "ledelstein"
 $kw_api_endpoint = ENV['KWSEEKER_KLOCWORK_API_ENDPOINT'] || 'http://localhost:3030/review/api'
-$kw_project_name = ENV['KWSEEKER_PROJECT_NAME'] || "analyze"
+$kw_project_name = ENV['KWSEEKER_KLOCWORK_PROJECT_NAME'] || 'seeker-test'
 
 redis = Redis.new
 
@@ -69,8 +69,8 @@ def analyze_deltas event
     # Enqueue analysis, using Jenkins, on the parent commit, and then on the commit itself.
     #
     $log.info "Queueing analyses of #{sha1} and its parent #{parent_sha}"
-    $jenkins.job.build("analyze", {branch_spec: parent_sha, build_name: "issue_#{event.id}_parent_#{parent_sha}"})
-    $jenkins.job.build("analyze", {branch_spec: sha1, build_name: "issue_#{event.id}_sha_#{sha1}"})
+    $jenkins.job.build("analyze", {branch_spec: parent_sha, kw_project_name: $kw_project_name, kw_build_name: "issue_#{event.id}_parent_#{parent_sha}"})
+    $jenkins.job.build("analyze", {branch_spec: sha1, kw_project_name: $kw_project_name, kw_build_name: "issue_#{event.id}_sha_#{sha1}"})
 
     #
     # Look for issues that were fixed by the second build.
@@ -86,6 +86,13 @@ def analyze_deltas event
   end
 end
 
+def create_or_update_job
+  contents = File.read("job_template.xml")
+  $log.info("read job template, contents: #{contents}")
+  $log.info("creating/updating Jenkins job")
+  $jenkins.job.create_or_update($jenkins_job_name, contents)
+end
+
 #
 # Find all the events with commits, and run before-and-after KW analyses on each.
 # Unless an event ID is specified on the command line, in which case, just analyze that event.
@@ -93,6 +100,7 @@ end
 if ! ARGV[0].nil?
   puts "Analyzing a single event is not implemented yet."
 else 
+  create_or_update_job
   each_event_with_commit { |event| analyze_deltas event }
 end
 
