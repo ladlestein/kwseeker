@@ -21,6 +21,7 @@ USER seeker
 WORKDIR /home/seeker
 
 COPY analyze.rb /home/seeker/analyze.rb
+COPY job_template.xml /home/seeker/job_template.xml
 
 COPY Gemfile /home/seeker/Gemfile
 COPY Gemfile.lock /home/seeker/Gemfile.lock
