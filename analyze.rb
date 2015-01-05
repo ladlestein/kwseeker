@@ -12,29 +12,31 @@ require 'jenkins_api_client'
 require 'faraday'
 require_relative 'klocwork_api'
 
-$log = Logger.new("/var/log/kwseeker/work.log")
+$log = Logger.new(STDOUT)
 
 $github_token = ENV['KWSEEKER_GITHUB_AUTH_TOKEN'] || ARGV[0]
-$repo = ENV['KWSEEKER_REPO'] || "ladlestein/seeker-test"
-$jenkins_server_ip = ENV['KWSEEKER_JENKINS_SERVER_IP'] || "localhost"
-$jenkins_server_port = ENV['KWSEEKER_JENKINS_SERVER_PORT'] || 3010
+$github_repo = ENV['KWSEEKER_GITHUB_REPO'] || "ladlestein/seeker-test"
+$jenkins_host = ENV['KWSEEKER_JENKINS_HOST'] || "localhost"
+$jenkins_port = ENV['KWSEEKER_JENKINS_PORT'] || 3010
 $jenkins_job_name = ENV['KWSEEKER_JENKINS_JOB_NAME'] || "analyze"
-$kw_username = ENV['KWSEEKER_KLOCWORK_USERNAME'] || "ledelstein"
-$kw_api_endpoint = ENV['KWSEEKER_KLOCWORK_API_ENDPOINT'] || 'http://localhost:3030/review/api'
-$kw_project_name = ENV['KWSEEKER_KLOCWORK_PROJECT_NAME'] || 'seeker-test'
-
+$kw_username = ENV['KWSEEKER_KW_USERNAME'] || "ledelstein"
+$kw_host = ENV['KWSEEKER_KW_HOST'] || 'localhost'
+$kw_project_name = ENV['KWSEEKER_KW_PROJECT_NAME'] || 'seeker-test'
+$build_command = ENV['KWSEEKER_BUILD_COMMAND'] || 'make'
+$prebuild_command = ENV['KWSEEKER_PREBUILD_COMMAND']
 redis = Redis.new
 
 $github = Octokit::Client.new(:access_token => $github_token)
 user = $github.user
 user.login
 
-$jenkins = JenkinsApi::Client.new(server_ip: $jenkins_server_ip, server_port: $jenkins_server_port)
-$klocwork = KlocworkApi::Client.new($kw_api_endpoint, $kw_username)
+$jenkins = JenkinsApi::Client.new(server_ip: $jenkins_host, server_port: $jenkins_port)
+kw_endpoint = "http://#{$kw_host}/review/api"
+$klocwork = KlocworkApi::Client.new(kw_endpoint, $kw_username)
 
 def each_event_with_commit
-  $log.info "Fetching issues from beginning of repo #{$repo}"
-  events = $github.repository_issue_events $repo
+  $log.info "Fetching issues from beginning of repo #{$github_repo}"
+  events = $github.repository_issue_events $github_repo
   n = events.length
 
   begin
@@ -57,11 +59,11 @@ def analyze_deltas event
   # Ask Github for this commit's parents.
   #
   sha1 = event.commit_id
-  commit = $github.commit($repo, sha1)
+  commit = $github.commit($github_repo, sha1)
   parents = commit.parents
 
   if parents.length > 1 
-    $log.warning "SHA1 #{sha1} in repo #{$repo} has #{parents.length} parents; more than one parent isn't supported yet."
+    $log.warn "SHA1 #{sha1} in repo #{$github_repo} has #{parents.length} parents; more than one parent isn't supported yet."
   else
     parent_sha = parents[0].sha
     
@@ -69,8 +71,22 @@ def analyze_deltas event
     # Enqueue analysis, using Jenkins, on the parent commit, and then on the commit itself.
     #
     $log.info "Queueing analyses of #{sha1} and its parent #{parent_sha}"
-    $jenkins.job.build("analyze", {branch_spec: parent_sha, kw_project_name: $kw_project_name, kw_build_name: "issue_#{event.id}_parent_#{parent_sha}"})
-    $jenkins.job.build("analyze", {branch_spec: sha1, kw_project_name: $kw_project_name, kw_build_name: "issue_#{event.id}_sha_#{sha1}"})
+    $jenkins.job.build("analyze", {
+                         branch_spec: parent_sha, 
+                         kw_project_name: $kw_project_name, 
+                         kw_build_name: "issue_#{event.id}_parent_#{parent_sha}",
+                         github_repo: $github_repo,
+                         build_command: $build_command,
+                         prebuild_command: $prebuild_command
+                       })
+    $jenkins.job.build("analyze", {
+                         branch_spec: sha1, 
+                         kw_project_name: $kw_project_name, 
+                         kw_build_name: "issue_#{event.id}_sha_#{sha1}",
+                         github_repo: $github_repo,
+                         build_command: $build_command,
+                         prebuild_command: $prebuild_command
+                       })
 
     #
     # Look for issues that were fixed by the second build.

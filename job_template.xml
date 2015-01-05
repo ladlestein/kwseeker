@@ -21,6 +21,21 @@
           <description></description>
           <defaultValue></defaultValue>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>github_repo</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>build_command</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>prebuild_command</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -28,7 +43,7 @@
     <configVersion>2</configVersion>
     <userRemoteConfigs>
       <hudson.plugins.git.UserRemoteConfig>
-        <url>https://github.com/ladlestein/seeker-test.git</url>
+        <url>https://github.com/$github_repo</url>
       </hudson.plugins.git.UserRemoteConfig>
     </userRemoteConfigs>
     <branches>
@@ -50,8 +65,9 @@
     <hudson.tasks.Shell>
       <command>
 PATH=/home/klocwork/client/bin:$PATH
-kwinject make
-kwbuildproject --incremental --url http://kw1:8080/$kw_project_name --license-host kw1 --license-port 27000 -o kwtables kwinject.out
+$prebuild_command
+kwinject $build_command
+kwbuildproject --force --url http://kw1:8080/$kw_project_name --license-host kw1 --license-port 27000 -o kwtables kwinject.out
 kwadmin load --url http://kw1:8080 $kw_project_name kwtables
 </command>
     </hudson.tasks.Shell>
