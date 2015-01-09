@@ -12,6 +12,21 @@ require 'jenkins_api_client'
 require 'faraday'
 require_relative 'klocwork_api'
 
+def issues client, repo
+
+  cache = client.repository_issue_events repo
+  next_relation = client.last_response.rels[:next] # do this before we fetch each issue, or else last_response will be changed.
+  cache.each { |issue| yield issue }
+  until next_relation.nil?
+    next_url = next_relation.href
+    $log.info "Fetching next page of issues from #{next_url}"
+    cache = $github.get next_url
+    next_relation = client.last_response.rels[:next] # do this before we fetch each issue, or else last_response will be changed.
+    cache.each { |issue| yield issue }
+  end
+
+end
+
 $log = Logger.new(STDOUT)
 
 $github_token = ENV['KWSEEKER_GITHUB_AUTH_TOKEN'] || ARGV[0]
@@ -34,30 +49,13 @@ $jenkins = JenkinsApi::Client.new(server_ip: $jenkins_host, server_port: $jenkin
 kw_endpoint = "http://#{$kw_host}/review/api"
 $klocwork = KlocworkApi::Client.new(kw_endpoint, $kw_username)
 
-def each_event_with_commit
-  $log.info "Fetching issues from beginning of repo #{$github_repo}"
-  events = $github.repository_issue_events $github_repo
-  n = events.length
-
-  begin
-    events_with_commit = events.select {|e| ! e.commit_id.nil?}
-    events_with_commit.each do |e| 
-      $log.info "Found issue #{e.id} with commit #{e.commit_id}"
-      yield e
-    end
-    unless $github.last_response.rels[:next].nil?
-      next_url = $github.last_response.rels[:next].href
-      $log.info "Fetching next page of issues from #{next_url}"
-      events = $github.get next_url
-      n += events.length
-    end
-  end until $github.last_response.rels[:next].nil?
-end
-
 def analyze_deltas event
+
+  $log.info "Analyzing deltas for issue #{event.issue.number} at #{event.issue.url}"
   #
   # Ask Github for this commit's parents.
   #
+return
   sha1 = event.commit_id
   commit = $github.commit($github_repo, sha1)
   parents = commit.parents
@@ -87,7 +85,6 @@ def analyze_deltas event
                          build_command: $build_command,
                          prebuild_command: $prebuild_command
                        })
-
     #
     # Look for issues that were fixed by the second build.
     #
@@ -116,8 +113,9 @@ end
 if ! ARGV[0].nil?
   puts "Analyzing a single event is not implemented yet."
 else 
-  create_or_update_job
-  each_event_with_commit { |event| analyze_deltas event }
+#  create_or_update_job
+  $log.info "Fetching issues from beginning of repo #{$github_repo}"
+  issues($github, $github_repo) { | issue | analyze_deltas( issue ) if ! issue.commit_id.nil? }
 end
 
 
