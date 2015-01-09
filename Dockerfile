@@ -11,22 +11,26 @@ RUN useradd -m seeker \
 
 RUN gem install bundler
 
-ENV KWSEEKER_GITHUB_AUTH_TOKEN a7338953339f0a8673983eb678acfd2e6700dff2
-RUN mkdir -p /var/log/kwseeker \
-    && chown seeker:seeker /var/log/kwseeker
+WORKDIR /home/seeker
 
+COPY Gemfile /home/seeker/Gemfile
+COPY Gemfile.lock /home/seeker/Gemfile.lock
 
 USER seeker
 
-WORKDIR /home/seeker
+RUN bundle install --path vendor/bundle
+
+ENV KWSEEKER_GITHUB_AUTH_TOKEN a7338953339f0a8673983eb678acfd2e6700dff2
 
 COPY analyze.rb /home/seeker/analyze.rb
 COPY job_template.xml /home/seeker/job_template.xml
 
-COPY Gemfile /home/seeker/Gemfile
-COPY Gemfile.lock /home/seeker/Gemfile.lock
 COPY klocwork_api.rb /home/seeker/klocwork_api.rb
 
-RUN bundle install --path vendor/bundle
+USER root
+
+RUN chown -R seeker:seeker .
+
+USER seeker
 
 CMD ruby ./analyze.rb
