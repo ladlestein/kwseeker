@@ -51,11 +51,10 @@ $klocwork = KlocworkApi::Client.new(kw_endpoint, $kw_username)
 
 def analyze_deltas event
 
-  $log.info "Analyzing deltas for issue #{event.issue.number} at #{event.issue.url}"
+  $log.info "Analyzing deltas for issue #{event.issue.number} at #{event.issue.url} with commit #{event.issue.commit_id}"
   #
   # Ask Github for this commit's parents.
   #
-return
   sha1 = event.commit_id
   commit = $github.commit($github_repo, sha1)
   parents = commit.parents
