@@ -36,6 +36,11 @@
           <description></description>
           <defaultValue></defaultValue>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>incremental</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -66,10 +71,10 @@
       <command>
 PATH=/home/klocwork/client/bin:$PATH
 $prebuild_command
-kwinject $build_command
-kwbuildproject --force --url http://kw1:8080/$kw_project_name --license-host kw1 --license-port 27000 -o kwtables kwinject.out
-kwadmin load --url http://kw1:8080 $kw_project_name kwtables
-</command>
+kwinject --update $build_command
+kwbuildproject $incremental --url http://kw1:8080/$kw_project_name --license-host kw1 --license-port 27000 -o kwtables kwinject.out
+kwadmin load --url http://kw1:8080 --name $kw_build_name $kw_project_name kwtables
+      </command>
     </hudson.tasks.Shell>
   </builders>
   <publishers/>
